@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -14,218 +14,325 @@ import (
 type Store interface {
 	RegisterTable(tableDesc TableDesc) error
 
-	Insert(record Record) (savedRecord *Record, err error)
+	Insert(tableName string, record Record) (affectedRows int64, err error)
+
+	Select(tableName string, qs []QueryItem) ([]Record, error)
+
+	Update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error)
+
+	Delete(talbeName string, qs []QueryItem) (affectedRows int64, err error)
 }
 
-type store struct{}
+type store struct {
+	InnerIDs map[string]int64
+
+	log *log.Logger
+}
 
 var (
 	ErrDuplicatedRecord         = errors.New("duplicate record")
 	ErrBoolNotSupportPrimaryKey = errors.New("bool type doesn't support primary key")
 )
 
-type ColumnTypes int
-
-const (
-	_ ColumnTypes = iota
-	ColumnTypeString
-	ColumnTypeBool
-	ColumnTypeInteger
-)
-
-type Column struct {
-	Name       string
-	Type       ColumnTypes
-	PrimaryKey bool
-}
-
-type TableDesc struct {
-	Name    string
-	Columns []Column
-}
-
-func (t TableDesc) GetPrimaryKey() (name string, ptype ColumnTypes, index int) {
-	for i, c := range t.Columns {
-		if c.PrimaryKey {
-			return c.Name, c.Type, i
-		}
-	}
-
-	return "", ColumnTypeBool, 0
-}
-
-func (t TableDesc) OffsetOfColumn(columnName string) (int, error) {
-	var offset int
-	for _, c := range t.Columns {
-		if c.Name == columnName {
-			return offset, nil
-		}
-
-		offset += sizeOf(c.Type)
-	}
-
-	return -1, fmt.Errorf("unkonwn column %s", columnName)
-}
-
-func (t TableDesc) GetTotalBytes() int {
-	var total int
-	for _, c := range t.Columns {
-		total += sizeOf(c.Type)
-	}
-
-	return total
-}
-
-func sizeOf(t ColumnTypes) int {
-	switch t {
-	case ColumnTypeString:
-		return 255
-	case ColumnTypeInteger:
-		return 8
-	case ColumnTypeBool:
-		return 1
-	}
-
-	panic("unsupport type")
-}
-
-func (t TableDesc) GetTableFile() (string, error) {
-	workingPath, err := getWorkingPath()
-	if err != nil {
-		return "", err
-	}
-
-	tableFile := filepath.Join(workingPath, t.Name)
-	return tableFile, nil
-}
-
-type Record struct {
-	TableName string
-	Values    []interface{}
-}
-
-func (r Record) GetTableDesc() (*TableDesc, error) {
-	for _, t := range tables {
-		if t.Name == r.TableName {
-			return &t, nil
-		}
-	}
-
-	return nil, fmt.Errorf("unregiester table %s", r.TableName)
-}
-
 var tables []TableDesc
 
 // NewStore creates new store implementation.
 func NewStore() Store {
-	return &store{}
+	// TODO should recovery innerIDs from db file when db starts.
+
+	return &store{
+		InnerIDs: make(map[string]int64),
+		log:      getLogger(),
+	}
+}
+
+func getLogger() *log.Logger {
+	fileName := "miniDB.log"
+	logFile, err := os.Create(fileName)
+	defer logFile.Close()
+	if err != nil {
+		log.Fatalln("open file error !")
+	}
+	return log.New(logFile, "[Debug]", log.Lshortfile)
 }
 
 func (s *store) RegisterTable(tableDesc TableDesc) error {
+	s.log.Output(2, "RegisterTable")
+	columns := make([]Column, 2)
+	// flags
+	columns[0] = Column{Name: "____flags____", Type: ColumnTypeByte}
+	// inner id
+	columns[1] = Column{Name: "____id____", Type: ColumnTypeInteger}
+
+	columns = append(columns, tableDesc.Columns...)
+
+	tableDesc.Columns = columns
+
 	tables = append(tables, tableDesc)
 	// TODO handle dumplicate register
+
+	s.InnerIDs[tableDesc.Name] = 0
 	return nil
 }
 
-// Save
+// Insert
 // 1. the order of values must be same with the order of table desc
-func (s *store) Insert(record Record) (savedRecord *Record, err error) {
+func (s *store) Insert(tableName string, record Record) (affectedRows int64, err error) {
+	innerValues := make([]interface{}, 2)
+	innerValues[0] = byte(0)
+	innerValues[1] = s.InnerIDs[tableName] + 1
+	record.Values = append(innerValues, record.Values...)
+
+	a, e := s.insert(record)
+	if e != nil {
+		return 0, e
+	}
+
+	s.InnerIDs[tableName]++
+	return a, nil
+}
+
+func (s *store) insert(record Record) (affectedRows int64, err error) {
 	tableDesc, err := record.GetTableDesc()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	primaryKey, ptype, columnIndex := tableDesc.GetPrimaryKey()
 	if primaryKey != "" {
-		if err := s.checkDuplicatedRecord(tableDesc, primaryKey, ptype, record.Values[columnIndex]); err != nil {
-			return nil, err
+		if err := s.checkDuplicatedRecord(record.TableName, primaryKey, ptype, columnIndex, record.Values[columnIndex]); err != nil {
+			return 0, err
 		}
 	}
 
 	recordBytes, err := getRecordBytes(record)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	tableFile, err := tableDesc.GetTableFile()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	f, err := os.OpenFile(tableFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
+	f, err := os.OpenFile(tableFile, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0777)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
 	defer f.Close()
 
 	_, err = f.Write(recordBytes)
 	if err != nil {
+		return 0, err
+	}
+
+	return 1, nil
+}
+
+func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) error {
+	query := func(record Record) bool {
+		return record.Values[primaryIndex] == primaryValue
+	}
+
+	records, err := s.scanRecords(tableName, query, nil)
+	if err != nil {
+		return err
+	}
+
+	if len(records) > 0 {
+		return ErrDuplicatedRecord
+	}
+
+	return nil
+}
+
+func query(qs []QueryItem) hitTarget {
+	return func(record Record) bool {
+		desc, _ := record.GetTableDesc()
+
+		for i, v := range record.Values {
+			if desc.Columns[i].Name == "____flags____" {
+				if v.(byte)&0x80 == 0x80 {
+					return false
+				}
+			}
+
+			for _, q := range qs {
+				if q.Operator == QueryOperatorEqual {
+					if desc.Columns[i].Name == q.Key && v != q.Value {
+						return false
+					}
+				}
+				// TODO support other operators
+			}
+		}
+
+		return true
+	}
+}
+
+func (s *store) Select(tableName string, qs []QueryItem) ([]Record, error) {
+	records, err := s.scanRecords(tableName, query(qs), nil)
+	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	for i := range records {
+		outValues := records[i].Values[2:]
+		records[i].Values = outValues
+	}
+
+	return records, nil
 }
 
-func (s *store) checkDuplicatedRecord(tableDesc *TableDesc, primaryKey string, primaryKeyType ColumnTypes, primaryValue interface{}) error {
+func (s *store) Update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error) {
+	// TODO update should also check primary key duplication.
+
+	return s.update(tableName, qs, setItems)
+}
+
+func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error) {
+	tableDesc, err := GetTableDescFromTableName(tableName)
+	if err != nil {
+		return 0, err
+	}
+
+	updateReplacer := func(record Record) (newRecord Record, err error) {
+		newRecord = Record{
+			TableName: tableName,
+			Values:    make([]interface{}, len(record.Values)),
+		}
+
+		for i, c := range tableDesc.Columns {
+			for _, si := range setItems {
+				if si.Name == c.Name {
+					newRecord.Values[i] = si.Value
+				} else {
+					newRecord.Values[i] = record.Values[i]
+				}
+			}
+		}
+
+		return newRecord, err
+	}
+
+	records, err := s.scanRecords(tableName, query(qs), updateReplacer)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(len(records)), nil
+
+}
+
+func (s *store) Delete(tableName string, qs []QueryItem) (affectedRows int64, err error) {
+	return s.update(tableName, qs, []UpdateSetItem{
+		UpdateSetItem{
+			Name:  "____flags____",
+			Value: byte(0x80),
+		},
+	})
+}
+
+type hitTarget func(record Record) bool
+type replacer func(record Record) (newRecord Record, err error)
+
+func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Record, error) {
+	tableDesc, err := GetTableDescFromTableName(tableName)
+	if err != nil {
+		return nil, err
+	}
+
 	tableFile, err := tableDesc.GetTableFile()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	offsetOfRecord, err := tableDesc.OffsetOfColumn(primaryKey)
+	f, err := os.OpenFile(tableFile, os.O_CREATE|os.O_RDWR, 0777)
 	if err != nil {
-		return err
-	}
-
-	totalBytes := tableDesc.GetTotalBytes()
-
-	f, err := os.OpenFile(tableFile, os.O_CREATE|os.O_RDONLY, 0777)
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	defer f.Close()
 
-	bs := make([]byte, sizeOf(primaryKeyType))
-	offset := int64(offsetOfRecord)
+	totalBytes := tableDesc.GetTotalBytes()
 
+	bs := make([]byte, totalBytes)
+	offset := int64(0)
+
+	records := make([]Record, 0)
 	for {
 		_, err := f.ReadAt(bs, offset)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			return err
+			return nil, err
 		}
 
-		switch primaryKeyType {
-		case ColumnTypeString:
-			var str string
-			index := bytes.IndexByte(bs, byte(0))
-			if index != -1 {
-				str = string(bs[:index])
-			} else {
-				str = string(bs)
+		record := Record{
+			TableName: tableName,
+			Values:    make([]interface{}, 0),
+		}
+
+		for _, c := range tableDesc.Columns {
+			columnOffset, err := tableDesc.OffsetOfColumn(c.Name)
+			if err != nil {
+				return nil, err
 			}
-			if primaryValue.(string) == str {
-				return ErrDuplicatedRecord
+
+			columnBytes := bs[columnOffset:(columnOffset + sizeOf(c.Type))]
+
+			switch c.Type {
+			case ColumnTypeString:
+				var str string
+				index := bytes.IndexByte(columnBytes, byte(0))
+				if index != -1 {
+					str = string(columnBytes[:index])
+				} else {
+					str = string(columnBytes)
+				}
+				record.Values = append(record.Values, str)
+			case ColumnTypeInteger:
+				buf := bytes.NewBuffer(columnBytes)
+				var x int64
+				binary.Read(buf, binary.BigEndian, &x)
+				record.Values = append(record.Values, x)
+			case ColumnTypeByte:
+				record.Values = append(record.Values, columnBytes[0])
+			case ColumnTypeBool:
+				v := columnBytes[0] != byte(0)
+				record.Values = append(record.Values, v)
 			}
-		case ColumnTypeInteger:
-			buf := bytes.NewBuffer(bs)
-			var x int64
-			binary.Read(buf, binary.BigEndian, &x)
-			if primaryValue.(int64) == x {
-				return ErrDuplicatedRecord
+		}
+
+		if ht(record) {
+			if r != nil {
+				newRecord, err := r(record)
+
+				if err != nil {
+					return nil, err
+				}
+
+				recordBytes, err := getRecordBytes(newRecord)
+				if err != nil {
+					return nil, err
+				}
+
+				_, err = f.WriteAt(recordBytes, offset)
+				if err != nil {
+					return nil, err
+				}
 			}
-		case ColumnTypeBool:
-			return ErrBoolNotSupportPrimaryKey
+
+			records = append(records, record)
 		}
 
 		offset += int64(totalBytes)
 	}
 
-	return nil
+	return records, nil
 }
 
 func getRecordBytes(record Record) ([]byte, error) {
@@ -244,6 +351,8 @@ func getRecordBytes(record Record) ([]byte, error) {
 			buf := bytes.NewBuffer([]byte{})
 			binary.Write(buf, binary.BigEndian, vv)
 			bs = append(bs, buf.Bytes()...)
+		case byte:
+			bs = append(bs, vv)
 		case bool:
 			var b byte
 			if vv {
