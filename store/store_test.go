@@ -1,13 +1,18 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
+	"runtime"
+	"strings"
 	"testing"
 )
 
 func TestCRUD(t *testing.T) {
+	clearTestData()
+
 	fileName := "miniDB.log"
 	logFile, err := os.Create(fileName)
 	defer logFile.Close()
@@ -127,4 +132,15 @@ func updateRecords(s Store, qs []QueryItem, uis []UpdateSetItem) {
 	}
 
 	fmt.Println("updated: ", affectedRows)
+}
+
+func clearTestData() {
+	_, file, _, ok := runtime.Caller(1)
+	if !ok {
+		panic(errors.New("Can not get current file info"))
+	}
+	sfile := strings.Split(file, "/")
+	datafile := strings.Join(append(sfile[:(len(sfile)-2)], "student"), "/")
+
+	os.Remove(datafile)
 }
