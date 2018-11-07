@@ -31,16 +31,15 @@ type Record struct {
 	Values    []interface{}
 }
 
-type QueryOperator int
+type Matcher func(left interface{}, right interface{}) (bool, error)
 
-const (
-	_ QueryOperator = iota
-	QueryOperatorEqual
-)
+func MatcherEqual(left interface{}, right interface{}) (bool, error) {
+	return left == right, nil
+}
 
 type QueryItem struct {
 	Key      string
-	Operator QueryOperator
+	Operator Matcher
 	Value    interface{}
 }
 

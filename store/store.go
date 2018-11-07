@@ -88,7 +88,7 @@ func (s *store) insert(record Record) (affectedRows int64, err error) {
 
 	primaryKey, ptype, columnIndex := tableDesc.GetPrimaryKey()
 	if primaryKey != "" {
-		if err := s.checkDuplicatedRecord(record.TableName, primaryKey, ptype, columnIndex, record.Values[columnIndex]); err != nil {
+		if _, err := s.checkDuplicatedRecord(record.TableName, primaryKey, ptype, columnIndex, record.Values[columnIndex]); err != nil {
 			return 0, err
 		}
 	}
@@ -118,45 +118,47 @@ func (s *store) insert(record Record) (affectedRows int64, err error) {
 	return 1, nil
 }
 
-func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) error {
-	query := func(record Record) bool {
-		return record.Values[primaryIndex] == primaryValue
+func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) ([]Record, error) {
+	query := func(record Record) (bool, error) {
+		return record.Values[primaryIndex] == primaryValue, nil
 	}
 
 	records, err := s.scanRecords(tableName, query, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(records) > 0 {
-		return ErrDuplicatedRecord
+		return records, ErrDuplicatedRecord
 	}
 
-	return nil
+	return nil, nil
 }
 
 func query(qs []QueryItem) hitTarget {
-	return func(record Record) bool {
+	return func(record Record) (bool, error) {
 		desc, _ := record.GetTableDesc()
 
 		for i, v := range record.Values {
 			if desc.Columns[i].Name == "____flags____" {
 				if v.(byte)&0x80 == 0x80 {
-					return false
+					return false, nil
 				}
 			}
 
 			for _, q := range qs {
-				if q.Operator == QueryOperatorEqual {
-					if desc.Columns[i].Name == q.Key && v != q.Value {
-						return false
-					}
+				match, err := q.Operator(q.Value, v)
+				if err != nil {
+					return false, err
 				}
-				// TODO support other operators
+
+				if desc.Columns[i].Name == q.Key && !match {
+					return false, nil
+				}
 			}
 		}
 
-		return true
+		return true, nil
 	}
 }
 
@@ -175,8 +177,6 @@ func (s *store) Select(tableName string, qs []QueryItem) ([]Record, error) {
 }
 
 func (s *store) Update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error) {
-	// TODO update should also check primary key duplication.
-
 	return s.update(tableName, qs, setItems)
 }
 
@@ -200,6 +200,29 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 					if err != nil {
 						return nil, err
 					}
+
+					primaryKeyName, pType, index := tableDesc.GetPrimaryKey()
+
+					var containPrimaryKeyColumnUpdate bool
+					for _, si := range setItems {
+						if si.Name == primaryKeyName {
+							containPrimaryKeyColumnUpdate = true
+						}
+					}
+
+					if containPrimaryKeyColumnUpdate {
+						duplicatedRecords, err := s.checkDuplicatedRecord(tableName, primaryKeyName, pType, index, newValue)
+						if err != nil {
+							if err == ErrDuplicatedRecord {
+								if len(duplicatedRecords) == 1 && duplicatedRecords[0].Values[1] == record.Values[1] {
+									goto Normal
+								}
+							}
+							return nil, err
+						}
+					}
+
+				Normal:
 					newRecord.Values[i] = newValue
 				} else {
 					newRecord.Values[i] = record.Values[i]
@@ -232,7 +255,7 @@ func (s *store) Delete(tableName string, qs []QueryItem) (affectedRows int64, er
 	})
 }
 
-type hitTarget func(record Record) bool
+type hitTarget func(record Record) (bool, error)
 type replacer func(record Record) (newRecord *Record, err error)
 
 func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Record, error) {
@@ -304,7 +327,12 @@ func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Recor
 			}
 		}
 
-		if ht(record) {
+		hit, err := ht(record)
+		if err != nil {
+			return nil, err
+		}
+
+		if hit {
 			if r != nil {
 				newRecord, err := r(record)
 
