@@ -195,7 +195,8 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 		for i, c := range tableDesc.Columns {
 			for _, si := range setItems {
 				if si.Name == c.Name {
-					newValue, err := si.Value(record)
+					outRecord := getOutRecord(record)
+					newValue, err := si.Value(outRecord)
 					if err != nil {
 						return nil, err
 					}
@@ -371,4 +372,11 @@ func getWorkingPath() (path string, err error) {
 		return "", err
 	}
 	return filepath.Dir(ePath), nil
+}
+
+func getOutRecord(record Record) Record {
+	newRecord := record
+	newRecord.Values = record.Values[2:]
+
+	return newRecord
 }

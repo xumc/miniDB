@@ -44,7 +44,7 @@ func main() {
 	fmt.Println("----------------update------------------")
 
 	updateFn := func(r store.Record) (interface{}, error) {
-		return "prefix_" + r.Values[3].(string), nil
+		return "prefix_" + r.Values[1].(string), nil
 	}
 
 	updateRecords(
