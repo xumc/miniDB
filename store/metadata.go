@@ -44,9 +44,11 @@ type QueryItem struct {
 	Value    interface{}
 }
 
+type UpdateSetValueFn func(record Record) (interface{}, error)
+
 type UpdateSetItem struct {
 	Name  string
-	Value interface{}
+	Value UpdateSetValueFn
 }
 
 func (t TableDesc) GetPrimaryKey() (name string, ptype ColumnTypes, index int) {

@@ -26,7 +26,7 @@ type Store interface {
 type store struct {
 	InnerIDs map[string]int64
 
-	log *log.Logger
+	logger *log.Logger
 }
 
 var (
@@ -37,27 +37,15 @@ var (
 var tables []TableDesc
 
 // NewStore creates new store implementation.
-func NewStore() Store {
+func NewStore(logger *log.Logger) Store {
 	// TODO should recovery innerIDs from db file when db starts.
-
 	return &store{
 		InnerIDs: make(map[string]int64),
-		log:      getLogger(),
+		logger:   logger,
 	}
-}
-
-func getLogger() *log.Logger {
-	fileName := "miniDB.log"
-	logFile, err := os.Create(fileName)
-	defer logFile.Close()
-	if err != nil {
-		log.Fatalln("open file error !")
-	}
-	return log.New(logFile, "[Debug]", log.Lshortfile)
 }
 
 func (s *store) RegisterTable(tableDesc TableDesc) error {
-	s.log.Output(2, "RegisterTable")
 	columns := make([]Column, 2)
 	// flags
 	columns[0] = Column{Name: "____flags____", Type: ColumnTypeByte}
@@ -198,8 +186,8 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 		return 0, err
 	}
 
-	updateReplacer := func(record Record) (newRecord Record, err error) {
-		newRecord = Record{
+	updateReplacer := func(record Record) (newRecord *Record, err error) {
+		newRecord = &Record{
 			TableName: tableName,
 			Values:    make([]interface{}, len(record.Values)),
 		}
@@ -207,7 +195,11 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 		for i, c := range tableDesc.Columns {
 			for _, si := range setItems {
 				if si.Name == c.Name {
-					newRecord.Values[i] = si.Value
+					newValue, err := si.Value(record)
+					if err != nil {
+						return nil, err
+					}
+					newRecord.Values[i] = newValue
 				} else {
 					newRecord.Values[i] = record.Values[i]
 				}
@@ -227,16 +219,20 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 }
 
 func (s *store) Delete(tableName string, qs []QueryItem) (affectedRows int64, err error) {
+	deleteItemFn := func(r Record) (interface{}, error) {
+		return byte(0x80), nil
+	}
+
 	return s.update(tableName, qs, []UpdateSetItem{
 		UpdateSetItem{
 			Name:  "____flags____",
-			Value: byte(0x80),
+			Value: deleteItemFn,
 		},
 	})
 }
 
 type hitTarget func(record Record) bool
-type replacer func(record Record) (newRecord Record, err error)
+type replacer func(record Record) (newRecord *Record, err error)
 
 func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Record, error) {
 	tableDesc, err := GetTableDescFromTableName(tableName)
@@ -315,7 +311,7 @@ func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Recor
 					return nil, err
 				}
 
-				recordBytes, err := getRecordBytes(newRecord)
+				recordBytes, err := getRecordBytes(*newRecord)
 				if err != nil {
 					return nil, err
 				}

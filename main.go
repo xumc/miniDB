@@ -2,12 +2,22 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"os"
 
 	"github.com/xumc/miniDB/store"
 )
 
 func main() {
-	s := store.NewStore()
+	fileName := "miniDB.log"
+	logFile, err := os.Create(fileName)
+	defer logFile.Close()
+	if err != nil {
+		log.Fatalln("open file error !")
+	}
+	logger := log.New(logFile, "[Debug]", log.LstdFlags)
+
+	s := store.NewStore(logger)
 
 	s.RegisterTable(store.TableDesc{
 		Name: "student",
@@ -32,9 +42,20 @@ func main() {
 	selectRecords(s, []store.QueryItem{})
 
 	fmt.Println("----------------update------------------")
-	updateRecords(s, []store.QueryItem{
-		store.QueryItem{Key: "id", Operator: store.QueryOperatorEqual, Value: int64(2)},
-	}, []store.UpdateSetItem{store.UpdateSetItem{Name: "name", Value: "after update"}})
+
+	updateFn := func(r store.Record) (interface{}, error) {
+		return "prefix_" + r.Values[3].(string), nil
+	}
+
+	updateRecords(
+		s,
+		[]store.QueryItem{
+			store.QueryItem{Key: "id", Operator: store.QueryOperatorEqual, Value: int64(2)},
+		},
+		[]store.UpdateSetItem{
+			store.UpdateSetItem{Name: "name", Value: updateFn},
+		},
+	)
 	selectRecords(s, []store.QueryItem{})
 
 	fmt.Println("----------------delete------------------")
