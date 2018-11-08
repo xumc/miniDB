@@ -63,7 +63,7 @@ func TestCRUD(t *testing.T) {
 	updateRecords(
 		s,
 		[]QueryItem{
-			QueryItem{Key: "id", Operator: MatcherEqual, Value: int64(2)},
+			QueryItem{Key: "id", Operator: MatcherEqual{}, Value: int64(2)},
 		},
 		[]UpdateSetItem{
 			UpdateSetItem{Name: "name", Value: updateFn},
@@ -76,7 +76,7 @@ func TestCRUD(t *testing.T) {
 
 	fmt.Println("----------------delete------------------")
 	deleteRecords(s, []QueryItem{
-		QueryItem{Key: "pass", Operator: MatcherEqual, Value: true},
+		QueryItem{Key: "pass", Operator: MatcherEqual{}, Value: true},
 	})
 	assertRecords(s, t, [][]interface{}{
 		[]interface{}{int64(2), "prefix_Jack 2", false},

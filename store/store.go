@@ -147,7 +147,7 @@ func query(qs []QueryItem) hitTarget {
 			}
 
 			for _, q := range qs {
-				match, err := q.Operator(q.Value, v)
+				match, err := q.Operator.Match(q.Value, v)
 				if err != nil {
 					return false, err
 				}

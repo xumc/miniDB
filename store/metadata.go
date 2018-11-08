@@ -31,16 +31,87 @@ type Record struct {
 	Values    []interface{}
 }
 
-type Matcher func(left interface{}, right interface{}) (bool, error)
+type Matcher interface {
+	Match(left interface{}, right interface{}) (bool, error)
+}
 
-func MatcherEqual(left interface{}, right interface{}) (bool, error) {
+type MatcherEqual struct{}
+
+func (m MatcherEqual) Match(left interface{}, right interface{}) (bool, error) {
 	return left == right, nil
+}
+
+type MatcherLessThan struct{}
+
+func (m MatcherLessThan) Match(left interface{}, right interface{}) (bool, error) {
+	return left.(int64) < right.(int64), nil
 }
 
 type QueryItem struct {
 	Key      string
 	Operator Matcher
 	Value    interface{}
+}
+
+type QueryTree struct {
+	Negative bool
+	MatchAll bool
+
+	Node *QueryTree
+	Item *QueryItem
+
+	Left  *QueryTree
+	Right *QueryTree
+}
+
+func (qt QueryTree) PrettyPrint() string {
+	if qt.Item != nil {
+		var str string
+		str += qt.Item.Key
+		switch qt.Item.Operator.(type) {
+		case MatcherEqual:
+			if qt.Negative {
+				str += "<>"
+			} else {
+				str += "="
+			}
+		case MatcherLessThan:
+			if qt.Negative {
+				str += ">="
+			} else {
+				str += "<"
+			}
+		case nil:
+		}
+
+		switch vv := qt.Item.Value.(type) {
+		case string:
+			str += fmt.Sprintf("'%s' ", vv)
+		case bool:
+			str += fmt.Sprintf("%v ", vv)
+		case byte:
+			str += fmt.Sprintf("%v ", vv)
+		case int64:
+			str += fmt.Sprintf("%d ", vv)
+		}
+
+		return str
+
+	}
+
+	var match string
+	if qt.MatchAll {
+		match = "AND "
+	} else {
+		match = "OR "
+	}
+
+	var negative string
+	if qt.Negative {
+		negative = "!"
+	}
+
+	return negative + "(" + qt.Left.PrettyPrint() + match + qt.Right.PrettyPrint() + ") "
 }
 
 type UpdateSetValueFn func(record Record) (interface{}, error)
