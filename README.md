@@ -1,6 +1,6 @@
 # miniDB
 
-[![Build Status](https://travis-ci.com/xumc/miniDB.svg?branch=master)](https://travis-ci.com/xumc/miniDB)
+[![Build Status](https://travis-ci.org/xumc/miniDB.svg?branch=master)](https://travis-ci.org/xumc/miniDB)
 
 miniDB is s practice project which foucus on implementing key technical points in relational database. It's not a prodution ready project.
 
