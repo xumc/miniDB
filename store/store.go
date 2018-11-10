@@ -16,11 +16,11 @@ type Store interface {
 
 	Insert(tableName string, record Record) (affectedRows int64, err error)
 
-	Select(tableName string, qs []QueryItem) ([]Record, error)
+	Select(tableName string, qt *QueryTree) ([]Record, error)
 
-	Update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error)
+	Update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error)
 
-	Delete(talbeName string, qs []QueryItem) (affectedRows int64, err error)
+	Delete(talbeName string, qt *QueryTree) (affectedRows int64, err error)
 }
 
 type store struct {
@@ -135,7 +135,7 @@ func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, prima
 	return nil, nil
 }
 
-func query(qs []QueryItem) hitTarget {
+func query(qt *QueryTree) hitTarget {
 	return func(record Record) (bool, error) {
 		desc, _ := record.GetTableDesc()
 
@@ -145,25 +145,62 @@ func query(qs []QueryItem) hitTarget {
 					return false, nil
 				}
 			}
-
-			for _, q := range qs {
-				match, err := q.Operator.Match(q.Value, v)
-				if err != nil {
-					return false, err
-				}
-
-				if desc.Columns[i].Name == q.Key && !match {
-					return false, nil
-				}
-			}
 		}
 
-		return true, nil
+		return isQueryTreeMatch(desc, qt, record.Values)
 	}
 }
 
-func (s *store) Select(tableName string, qs []QueryItem) ([]Record, error) {
-	records, err := s.scanRecords(tableName, query(qs), nil)
+func isQueryTreeMatch(tableDesc *TableDesc, qt *QueryTree, recordValues []interface{}) (bool, error) {
+	if qt == nil {
+		return true, nil
+	}
+
+	if qt.Item != nil {
+		qItem := qt.Item
+
+		index, err := tableDesc.IndexOfColumn(qItem.Key)
+		if err != nil {
+			return false, err
+		}
+
+		field := recordValues[index]
+		match, err := qt.Item.Operator.Match(qItem.Value, field)
+		if err != nil {
+			return false, err
+		}
+
+		if qt.Negative {
+			return !match, nil
+		}
+
+		return match, nil
+	}
+
+	leftVal, err := isQueryTreeMatch(tableDesc, qt.Left, recordValues)
+	if err != nil {
+		return false, err
+	}
+	rightVal, err := isQueryTreeMatch(tableDesc, qt.Right, recordValues)
+	if err != nil {
+		return false, err
+	}
+
+	if qt.Left.Negative {
+		leftVal = !leftVal
+	}
+	if qt.Right.Negative {
+		rightVal = !rightVal
+	}
+
+	if qt.MatchAll {
+		return leftVal && rightVal, nil
+	}
+	return leftVal || rightVal, nil
+}
+
+func (s *store) Select(tableName string, qt *QueryTree) ([]Record, error) {
+	records, err := s.scanRecords(tableName, query(qt), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -176,11 +213,11 @@ func (s *store) Select(tableName string, qs []QueryItem) ([]Record, error) {
 	return records, nil
 }
 
-func (s *store) Update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error) {
-	return s.update(tableName, qs, setItems)
+func (s *store) Update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error) {
+	return s.update(tableName, qt, setItems)
 }
 
-func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetItem) (affectedRows int64, err error) {
+func (s *store) update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error) {
 	tableDesc, err := GetTableDescFromTableName(tableName)
 	if err != nil {
 		return 0, err
@@ -233,7 +270,7 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 		return newRecord, err
 	}
 
-	records, err := s.scanRecords(tableName, query(qs), updateReplacer)
+	records, err := s.scanRecords(tableName, query(qt), updateReplacer)
 	if err != nil {
 		return 0, err
 	}
@@ -242,12 +279,12 @@ func (s *store) update(tableName string, qs []QueryItem, setItems []UpdateSetIte
 
 }
 
-func (s *store) Delete(tableName string, qs []QueryItem) (affectedRows int64, err error) {
+func (s *store) Delete(tableName string, qt *QueryTree) (affectedRows int64, err error) {
 	deleteItemFn := func(r Record) (interface{}, error) {
 		return byte(0x80), nil
 	}
 
-	return s.update(tableName, qs, []UpdateSetItem{
+	return s.update(tableName, qt, []UpdateSetItem{
 		UpdateSetItem{
 			Name:  "____flags____",
 			Value: deleteItemFn,

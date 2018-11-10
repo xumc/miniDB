@@ -62,8 +62,8 @@ func TestCRUD(t *testing.T) {
 
 	updateRecords(
 		s,
-		[]QueryItem{
-			QueryItem{Key: "id", Operator: MatcherEqual{}, Value: int64(2)},
+		&QueryTree{
+			Item: &QueryItem{Key: "id", Operator: MatcherEqual{}, Value: int64(2)},
 		},
 		[]UpdateSetItem{
 			UpdateSetItem{Name: "name", Value: updateFn},
@@ -75,8 +75,8 @@ func TestCRUD(t *testing.T) {
 	})
 
 	fmt.Println("----------------delete------------------")
-	deleteRecords(s, []QueryItem{
-		QueryItem{Key: "pass", Operator: MatcherEqual{}, Value: true},
+	deleteRecords(s, &QueryTree{
+		Item: &QueryItem{Key: "pass", Operator: MatcherEqual{}, Value: true},
 	})
 	assertRecords(s, t, [][]interface{}{
 		[]interface{}{int64(2), "prefix_Jack 2", false},
@@ -101,7 +101,7 @@ func insertRecord(s Store, record Record) {
 }
 
 func assertRecords(s Store, t *testing.T, expected [][]interface{}) {
-	rs, err := s.Select("student", []QueryItem{})
+	rs, err := s.Select("student", nil)
 	if err != nil {
 		panic(err)
 	}
@@ -116,8 +116,8 @@ func assertRecords(s Store, t *testing.T, expected [][]interface{}) {
 	return
 }
 
-func deleteRecords(s Store, qs []QueryItem) {
-	affectedRows, err := s.Delete("student", qs)
+func deleteRecords(s Store, qt *QueryTree) {
+	affectedRows, err := s.Delete("student", qt)
 	if err != nil {
 		panic(err)
 	}
@@ -125,8 +125,8 @@ func deleteRecords(s Store, qs []QueryItem) {
 	fmt.Println("deleted: ", affectedRows)
 }
 
-func updateRecords(s Store, qs []QueryItem, uis []UpdateSetItem) {
-	affectedRows, err := s.Update("student", qs, uis)
+func updateRecords(s Store, qt *QueryTree, uis []UpdateSetItem) {
+	affectedRows, err := s.Update("student", qt, uis)
 	if err != nil {
 		panic(err)
 	}

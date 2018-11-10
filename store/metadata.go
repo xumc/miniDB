@@ -57,7 +57,6 @@ type QueryTree struct {
 	Negative bool
 	MatchAll bool
 
-	Node *QueryTree
 	Item *QueryItem
 
 	Left  *QueryTree
@@ -139,6 +138,16 @@ func (t TableDesc) OffsetOfColumn(columnName string) (int, error) {
 		}
 
 		offset += sizeOf(c.Type)
+	}
+
+	return -1, fmt.Errorf("unkonwn column %s", columnName)
+}
+
+func (t TableDesc) IndexOfColumn(columnName string) (int, error) {
+	for i, c := range t.Columns {
+		if c.Name == columnName {
+			return i, nil
+		}
 	}
 
 	return -1, fmt.Errorf("unkonwn column %s", columnName)
