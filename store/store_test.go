@@ -54,6 +54,27 @@ func TestCRUD(t *testing.T) {
 		[]interface{}{int64(2), "Jack 2", false},
 	})
 
+	fmt.Println("----------------select------------------")
+	records, err := s.Select(
+		"student",
+		&QueryTree{
+			Left: &QueryTree{
+				Item: &QueryItem{Key: "id", Operator: MatcherEqual{}, Value: int64(1)},
+			},
+			Right: &QueryTree{
+				Negative: true,
+				Item:     &QueryItem{Key: "pass", Operator: MatcherEqual{}, Value: false},
+			},
+			MatchAll: true,
+		},
+	)
+	if err != nil {
+		t.Fail()
+	}
+	if len(records) != 1 || records[0].Values[0] != int64(1) {
+		t.Fail()
+	}
+
 	fmt.Println("----------------update------------------")
 
 	updateFn := func(r Record) (interface{}, error) {
