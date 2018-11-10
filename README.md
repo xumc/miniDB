@@ -2,6 +2,9 @@
 
 [![Build Status](https://travis-ci.org/xumc/miniDB.svg?branch=master)](https://travis-ci.org/xumc/miniDB)
 
+[![codecov](https://codecov.io/gh/xumc/miniDB/branch/master/graph/badge.svg)](https://codecov.io/gh/xumc/miniDB)
+
+
 miniDB is s practice project which foucus on implementing key technical points in relational database. It's not a prodution ready project.
 
 ### roadmap
