@@ -1,5 +1,7 @@
 # miniDB
 
+[![Build Status](https://travis-ci.com/xumc/miniDB.svg?branch=master)](https://travis-ci.com/xumc/miniDB)
+
 miniDB is s practice project which foucus on implementing key technical points in relational database. It's not a prodution ready project.
 
 ### roadmap
@@ -12,3 +14,6 @@ miniDB is s practice project which foucus on implementing key technical points i
 ### Store
 
 We plan to only support integer, bool and varchar types. In Store component, our goal is storing records into the file. Each file represents a table. the folder of the table files is database name.
+
+
+### Query
