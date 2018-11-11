@@ -11,21 +11,11 @@ import (
 )
 
 func TestCRUD(t *testing.T) {
-	clearTestData()
-
-	fileName := "miniDB.log"
-	logFile, err := os.Create(fileName)
-	defer logFile.Close()
-	if err != nil {
-		log.Fatalln("open file error !")
-	}
-	logger := log.New(logFile, "[Debug]", log.LstdFlags)
-
-	s := NewStore(logger)
+	s := NewStore(&log.Logger{})
 
 	fmt.Println("----------------regiester------------------")
 
-	err = s.RegisterTable(TableDesc{
+	err := s.RegisterTable(TableDesc{
 		Name: "student",
 		Columns: []Column{
 			Column{Name: "id", Type: ColumnTypeInteger, PrimaryKey: true},
@@ -86,8 +76,8 @@ func TestCRUD(t *testing.T) {
 		&QueryTree{
 			Item: &QueryItem{Key: "id", Operator: MatcherEqual{}, Value: int64(2)},
 		},
-		[]UpdateSetItem{
-			UpdateSetItem{Name: "name", Value: updateFn},
+		[]SetItem{
+			SetItem{Name: "name", Value: updateFn},
 		},
 	)
 	assertRecords(s, t, [][]interface{}{
@@ -146,7 +136,7 @@ func deleteRecords(s Store, qt *QueryTree) {
 	fmt.Println("deleted: ", affectedRows)
 }
 
-func updateRecords(s Store, qt *QueryTree, uis []UpdateSetItem) {
+func updateRecords(s Store, qt *QueryTree, uis []SetItem) {
 	affectedRows, err := s.Update("student", qt, uis)
 	if err != nil {
 		panic(err)
@@ -162,6 +152,41 @@ func clearTestData() {
 	}
 	sfile := strings.Split(file, "/")
 	datafile := strings.Join(append(sfile[:(len(sfile)-2)], "student"), "/")
-
 	os.Remove(datafile)
+
+	metadata := strings.Join(append(sfile[:(len(sfile)-2)], "metadata"), "/")
+	os.Remove(metadata)
+
+	clearTableDescs()
+}
+
+func TestDuplicateTableRegistion(t *testing.T) {
+	clearTestData()
+
+	s := NewStore(&log.Logger{})
+	err := s.RegisterTable(TableDesc{
+		Name: "student",
+		Columns: []Column{
+			Column{Name: "id", Type: ColumnTypeInteger, PrimaryKey: true},
+			Column{Name: "name", Type: ColumnTypeString},
+			Column{Name: "pass", Type: ColumnTypeBool},
+		},
+	})
+
+	if err != nil {
+		t.Errorf("err should be nil, but %s", err)
+	}
+
+	err = s.RegisterTable(TableDesc{
+		Name: "student",
+		Columns: []Column{
+			Column{Name: "id", Type: ColumnTypeInteger, PrimaryKey: true},
+			Column{Name: "name", Type: ColumnTypeString},
+			Column{Name: "pass", Type: ColumnTypeBool},
+		},
+	})
+
+	if err != ErrDuplicatedTable {
+		t.Errorf("it should be duplicate table erro")
+	}
 }

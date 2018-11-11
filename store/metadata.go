@@ -1,7 +1,10 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 )
 
@@ -22,8 +25,16 @@ type Column struct {
 }
 
 type TableDesc struct {
-	Name    string "json''"
-	Columns []Column
+	Name       string
+	Columns    []Column
+	MaxInnerID int64
+}
+
+var tables []TableDesc
+
+// clearTableDescs clears table descs, only used in test
+func clearTableDescs() {
+	tables = make([]TableDesc, 0)
 }
 
 type Record struct {
@@ -33,7 +44,7 @@ type Record struct {
 
 type UpdateSetValueFn func(record Record) (interface{}, error)
 
-type UpdateSetItem struct {
+type SetItem struct {
 	Name  string
 	Value UpdateSetValueFn
 }
@@ -117,4 +128,66 @@ func sizeOf(t ColumnTypes) int {
 	}
 
 	panic("unsupport type")
+}
+
+func SaveMetadata() error {
+	descBytes, err := json.Marshal(tables)
+	if err != nil {
+		panic(err)
+	}
+	metaDatafilePath, err := getMetadataFilePath()
+	if err != nil {
+		panic(err)
+	}
+
+	f, err := os.OpenFile(metaDatafilePath, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0777)
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	_, err = f.WriteAt(descBytes, 0)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func LoadMetadata() error {
+	metaDatafilePath, err := getMetadataFilePath()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(metaDatafilePath); os.IsNotExist(err) {
+		return nil
+	}
+
+	metadata, err := ioutil.ReadFile(metaDatafilePath)
+	if err != nil {
+		return err
+	}
+
+	tableDescs := []TableDesc{}
+	err = json.Unmarshal(metadata, &tableDescs)
+	if err != nil {
+		return err
+	}
+
+	tables = tableDescs
+
+	// TODO make sure MaxInnerID in disk is right
+	return nil
+}
+
+func getMetadataFilePath() (path string, err error) {
+	workingPath, err := getWorkingPath()
+	if err != nil {
+		return "", err
+	}
+
+	metadataFilePath := filepath.Join(workingPath, "____metadata____")
+	return metadataFilePath, nil
 }

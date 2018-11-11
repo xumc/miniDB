@@ -17,34 +17,35 @@ type Store interface {
 
 	Select(tableName string, qt *QueryTree) ([]Record, error)
 
-	Update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error)
+	Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error)
 
 	Delete(talbeName string, qt *QueryTree) (affectedRows int64, err error)
 }
 
 type store struct {
-	InnerIDs map[string]int64
-
 	logger *log.Logger
 }
 
 var (
 	ErrDuplicatedRecord         = errors.New("duplicate record")
 	ErrBoolNotSupportPrimaryKey = errors.New("bool type doesn't support primary key")
+	ErrDuplicatedTable          = errors.New("duplicate table name")
 )
-
-var tables []TableDesc
 
 // NewStore creates new store implementation.
 func NewStore(logger *log.Logger) Store {
-	// TODO should recovery innerIDs from db file when db starts.
 	return &store{
-		InnerIDs: make(map[string]int64),
-		logger:   logger,
+		logger: logger,
 	}
 }
 
 func (s *store) RegisterTable(tableDesc TableDesc) error {
+	for _, t := range tables {
+		if t.Name == tableDesc.Name {
+			return ErrDuplicatedTable
+		}
+	}
+
 	columns := make([]Column, 2)
 	// flags
 	columns[0] = Column{Name: "____flags____", Type: ColumnTypeByte}
@@ -52,22 +53,28 @@ func (s *store) RegisterTable(tableDesc TableDesc) error {
 	columns[1] = Column{Name: "____id____", Type: ColumnTypeInteger}
 
 	columns = append(columns, tableDesc.Columns...)
-
 	tableDesc.Columns = columns
-
 	tables = append(tables, tableDesc)
-	// TODO handle dumplicate register
 
-	s.InnerIDs[tableDesc.Name] = 0
+	err := SaveMetadata()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Insert
 // 1. the order of values must be same with the order of table desc
 func (s *store) Insert(tableName string, record Record) (affectedRows int64, err error) {
+	tableDesc, err := record.GetTableDesc()
+	if err != nil {
+		return 0, err
+	}
+
 	innerValues := make([]interface{}, 2)
 	innerValues[0] = byte(0)
-	innerValues[1] = s.InnerIDs[tableName] + 1
+	innerValues[1] = tableDesc.MaxInnerID + 1
 	record.Values = append(innerValues, record.Values...)
 
 	a, e := s.insert(record)
@@ -75,7 +82,7 @@ func (s *store) Insert(tableName string, record Record) (affectedRows int64, err
 		return 0, e
 	}
 
-	s.InnerIDs[tableName]++
+	tableDesc.MaxInnerID++
 	return a, nil
 }
 
@@ -117,11 +124,11 @@ func (s *store) insert(record Record) (affectedRows int64, err error) {
 	return 1, nil
 }
 
-func (s *store) Update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error) {
+func (s *store) Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
 	return s.update(tableName, qt, setItems)
 }
 
-func (s *store) update(tableName string, qt *QueryTree, setItems []UpdateSetItem) (affectedRows int64, err error) {
+func (s *store) update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
 	tableDesc, err := GetTableDescFromTableName(tableName)
 	if err != nil {
 		return 0, err
@@ -188,8 +195,8 @@ func (s *store) Delete(tableName string, qt *QueryTree) (affectedRows int64, err
 		return byte(0x80), nil
 	}
 
-	return s.update(tableName, qt, []UpdateSetItem{
-		UpdateSetItem{
+	return s.update(tableName, qt, []SetItem{
+		SetItem{
 			Name:  "____flags____",
 			Value: deleteItemFn,
 		},
