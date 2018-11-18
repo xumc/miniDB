@@ -1,23 +1,32 @@
 package sqlparser
 
 import (
+	"log"
 	"strings"
 
 	"github.com/alecthomas/participle/lexer"
 	"github.com/alecthomas/participle/lexer/ebnf"
+	"github.com/xumc/miniDB/store"
 )
 
 type Parser interface {
 	Parse(sql string) (SQL, error)
+
+	TransformInsert(ast *InsertSQL, tableDesc *store.TableDesc) store.Record
+	TransformUpdate(ast *UpdateSQL, tableDesc *store.TableDesc) (*store.QueryTree, []store.SetItem)
+	TransformSelect(ast *SelectSQL) *store.QueryTree
+	TransformDelete(ast *DeleteSQL) *store.QueryTree
 }
 
-func NewParser() Parser {
-	return parser{}
+func NewParser(logger *log.Logger) Parser {
+	return parser{logger: logger}
 }
 
 type SQL interface{}
 
-type parser struct{}
+type parser struct {
+	logger *log.Logger
+}
 
 var sqlLexer = lexer.Must(ebnf.New(`
 Comment = "--" { "\u0000"…"\uffff"-"\n" } .

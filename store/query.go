@@ -92,6 +92,15 @@ func (qt QueryTree) PrettyPrint() string {
 
 func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) ([]Record, error) {
 	query := func(record Record) (bool, error) {
+		desc, err := record.GetTableDesc()
+		if err != nil {
+			return false, err
+		}
+
+		if isDeletedItem(desc, record) {
+			return false, nil
+		}
+
 		return record.Values[primaryIndex] == primaryValue, nil
 	}
 
@@ -109,18 +118,29 @@ func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, prima
 
 func query(qt *QueryTree) hitTarget {
 	return func(record Record) (bool, error) {
-		desc, _ := record.GetTableDesc()
+		desc, err := record.GetTableDesc()
+		if err != nil {
+			return false, err
+		}
 
-		for i, v := range record.Values {
-			if desc.Columns[i].Name == "____flags____" {
-				if v.(byte)&0x80 == 0x80 {
-					return false, nil
-				}
-			}
+		if isDeletedItem(desc, record) {
+			return false, nil
 		}
 
 		return isQueryTreeMatch(desc, qt, record.Values)
 	}
+}
+
+func isDeletedItem(desc *TableDesc, record Record) bool {
+	for i, v := range record.Values {
+		if desc.Columns[i].Name == "____flags____" {
+			if v.(byte)&0x80 == 0x80 {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func isQueryTreeMatch(tableDesc *TableDesc, qt *QueryTree, recordValues []interface{}) (bool, error) {

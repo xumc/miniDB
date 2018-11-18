@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -180,6 +181,19 @@ func LoadMetadata() error {
 
 	// TODO make sure MaxInnerID in disk is right
 	return nil
+}
+
+func GetMetadataOf(tableName string) (*TableDesc, error) {
+	for _, t := range tables {
+		if t.Name == tableName {
+			outDesc := t
+			outDesc.Columns = t.Columns[2:]
+			return &outDesc, nil
+		}
+	}
+
+	return nil, errors.New("%s not found")
+
 }
 
 func getMetadataFilePath() (path string, err error) {

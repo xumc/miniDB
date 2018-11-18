@@ -2,6 +2,7 @@ package sqlparser
 
 import (
 	"github.com/alecthomas/participle"
+	"github.com/xumc/miniDB/store"
 )
 
 type DeleteSQL struct {
@@ -27,4 +28,8 @@ func (p parser) ParseDelete(sql string) (*DeleteSQL, error) {
 	}
 
 	return ast, nil
+}
+
+func (p parser) TransformDelete(ast *DeleteSQL) *store.QueryTree {
+	return transformWhere(ast.Where)
 }

@@ -15,7 +15,7 @@ type Store interface {
 
 	Insert(tableName string, record Record) (affectedRows int64, err error)
 
-	Select(tableName string, qt *QueryTree) ([]Record, error)
+	Select(tableName string, qt *QueryTree) ([]Record, error) // TODO support fields
 
 	Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error)
 

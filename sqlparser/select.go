@@ -2,6 +2,7 @@ package sqlparser
 
 import (
 	"github.com/alecthomas/participle"
+	"github.com/xumc/miniDB/store"
 )
 
 type FieldValue struct {
@@ -32,4 +33,8 @@ func (p parser) ParseSelect(sql string) (*SelectSQL, error) {
 	}
 
 	return ast, nil
+}
+
+func (p parser) TransformSelect(ast *SelectSQL) *store.QueryTree {
+	return transformWhere(ast.Where)
 }
