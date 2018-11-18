@@ -1,6 +1,8 @@
 package sqlparser
 
 import (
+	"strings"
+
 	"github.com/alecthomas/participle"
 	"github.com/xumc/miniDB/store"
 )
@@ -8,7 +10,7 @@ import (
 type Boolean bool
 
 func (b *Boolean) Capture(values []string) error {
-	*b = values[0] == "TRUE"
+	*b = strings.ToLower(values[0]) == "true"
 	return nil
 }
 

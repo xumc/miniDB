@@ -1,6 +1,7 @@
 package sqlparser
 
 import (
+	"log"
 	"testing"
 
 	"github.com/kr/pretty"
@@ -22,12 +23,15 @@ var (
 	e1         = int64(1)
 	e30        = int64(30)
 	etrue      = true
+	eequal     = Operator("=")
+	epass      = "pass"
+	ebtrue     = Boolean(true)
 )
 
 func TestInsert(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(&log.Logger{})
 
-	sql, err := parser.Parse("INSERT INTO student(id, name, age) VALUES(1, \"xumc\", 30);")
+	sql, err := parser.Parse("INSERT INTO student(id, name, age, pass) VALUES(1, \"xumc\", 30, true);")
 	assert.Empty(t, err)
 	isql := sql.(*InsertSQL)
 
@@ -44,6 +48,9 @@ func TestInsert(t *testing.T) {
 			&InsertField{
 				Name: &eage,
 			},
+			&InsertField{
+				Name: &epass,
+			},
 		},
 		Values: []*InsertValue{
 			&InsertValue{
@@ -58,6 +65,11 @@ func TestInsert(t *testing.T) {
 				String: (*string)(nil),
 				Number: &e30,
 			},
+			&InsertValue{
+				String:  (*string)(nil),
+				Number:  (*int64)(nil),
+				Boolean: &ebtrue,
+			},
 		},
 	}
 	diffs := pretty.Diff(expected, *isql)
@@ -65,7 +77,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(&log.Logger{})
 
 	sql, err := parser.Parse("UPDATE student SET name=\"mxu\", age=30 WHERE id=1;")
 	assert.Empty(t, err)
@@ -97,7 +109,7 @@ func TestUpdate(t *testing.T) {
 			RightTree: (*QueryTree)(nil),
 			Item: &QueryItem{
 				Key:      &eid,
-				Operator: &etrue,
+				Operator: &eequal,
 				Value: &QueryValue{
 					String: (*string)(nil),
 					Number: &e1,
@@ -111,7 +123,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(&log.Logger{})
 
 	sql, err := parser.Parse("SELECT name FROM student WHERE id=1;")
 	assert.Empty(t, err)
@@ -133,7 +145,7 @@ func TestSelect(t *testing.T) {
 			RightTree: (*QueryTree)(nil),
 			Item: &QueryItem{
 				Key:      &eid,
-				Operator: &etrue,
+				Operator: &eequal,
 				Value: &QueryValue{
 					String: (*string)(nil),
 					Number: &e1,
@@ -147,7 +159,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	parser := NewParser()
+	parser := NewParser(&log.Logger{})
 
 	sql, err := parser.Parse("DELETE FROM student WHERE id=1;")
 	assert.Empty(t, err)
@@ -163,7 +175,7 @@ func TestDelete(t *testing.T) {
 			RightTree: (*QueryTree)(nil),
 			Item: &QueryItem{
 				Key:      &eid,
-				Operator: &etrue,
+				Operator: &eequal,
 				Value: &QueryValue{
 					String: (*string)(nil),
 					Number: &e1,

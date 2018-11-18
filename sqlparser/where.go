@@ -1,14 +1,18 @@
 package sqlparser
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type MatchAll bool
 
 func (m *MatchAll) Capture(values []string) error {
-	if values[0] != "AND" && values[0] != "OR" {
+	v := strings.ToLower(values[0])
+	if v != "and" && v != "or" {
 		return fmt.Errorf("invalid identifier %s", values[0])
 	}
-	*m = values[0] == "AND"
+	*m = v == "and"
 	return nil
 }
 

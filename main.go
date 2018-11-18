@@ -28,9 +28,9 @@ func main() {
 
 	p := sqlparser.NewParser(logger)
 
-	// sql, err := p.Parse("INSERT INTO student(id, name, pass) VALUES(1, \"xumcxumc\", true);")
+	sql, err := p.Parse("INSERT INTO student(id, name, pass) VALUES(1, \"xumcxumc\", true);")
 	// sql, err := p.Parse("UPDATE student SET name=\"xumcxumcxumc\" WHERE name=\"xumcxumc\";")
-	sql, err := p.Parse("SELECT * FROM student WHERE name=\"xumcxumc\";")
+	// sql, err := p.Parse("SELECT * FROM student WHERE name=\"xumcxumc\";")
 	// sql, err := p.Parse("DELETE FROM student WHERE name=\"xumcxumc\";")
 	if err != nil {
 		panic(err)
@@ -42,7 +42,6 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-
 		record := p.TransformInsert(sqlStruct, tableDesc)
 
 		_, err = s.Insert(record.TableName, record)
