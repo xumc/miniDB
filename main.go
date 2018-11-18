@@ -16,5 +16,10 @@ func main() {
 	}
 	logger := log.New(logFile, "[Debug]", log.LstdFlags)
 
+	err = store.LoadMetadata()
+	if err != nil {
+		panic(err)
+	}
+
 	store.NewStore(logger)
 }
