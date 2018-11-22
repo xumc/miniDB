@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package server;
+
+service Executor {
+  rpc Execute (SqlRequest) returns (SqlReply) {}
+}
+
+message SqlRequest {
+  repeated string sql = 1;
+}
+
+message SqlReply {
+  message record {
+    repeated string columns = 1;
+  }
+
+  repeated record records = 1;
+}
