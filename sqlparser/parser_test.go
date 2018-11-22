@@ -29,7 +29,7 @@ var (
 )
 
 func TestInsert(t *testing.T) {
-	parser := NewParser(&log.Logger{})
+	parser := NewParser(&log.Logger{}, nil)
 
 	sql, err := parser.Parse("INSERT INTO student(id, name, age, pass) VALUES(1, \"xumc\", 30, true);")
 	assert.Empty(t, err)
@@ -77,7 +77,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	parser := NewParser(&log.Logger{})
+	parser := NewParser(&log.Logger{}, nil)
 
 	sql, err := parser.Parse("UPDATE student SET name=\"mxu\", age=30 WHERE id=1;")
 	assert.Empty(t, err)
@@ -123,7 +123,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestSelect(t *testing.T) {
-	parser := NewParser(&log.Logger{})
+	parser := NewParser(&log.Logger{}, nil)
 
 	sql, err := parser.Parse("SELECT name FROM student WHERE id=1;")
 	assert.Empty(t, err)
@@ -159,7 +159,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	parser := NewParser(&log.Logger{})
+	parser := NewParser(&log.Logger{}, nil)
 
 	sql, err := parser.Parse("DELETE FROM student WHERE id=1;")
 	assert.Empty(t, err)
