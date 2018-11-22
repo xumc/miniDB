@@ -1,32 +1,45 @@
 package sqlparser
 
 import (
+	"fmt"
 	"log"
 	"strings"
+
+	"github.com/xumc/miniDB/transaction"
 
 	"github.com/alecthomas/participle/lexer"
 	"github.com/alecthomas/participle/lexer/ebnf"
 	"github.com/xumc/miniDB/store"
 )
 
-type Parser interface {
+type SQLParser interface {
 	Parse(sql string) (SQL, error)
 
 	TransformInsert(ast *InsertSQL, tableDesc *store.TableDesc) store.Record
 	TransformUpdate(ast *UpdateSQL, tableDesc *store.TableDesc) (*store.QueryTree, []store.SetItem)
 	TransformSelect(ast *SelectSQL) *store.QueryTree
 	TransformDelete(ast *DeleteSQL) *store.QueryTree
+
+	Run()
 }
 
-func NewParser(logger *log.Logger) Parser {
-	return parser{logger: logger}
+type Parser struct {
+	logger      *log.Logger
+	transaction *transaction.Transaction
+}
+
+func NewParser(logger *log.Logger, t *transaction.Transaction) *Parser {
+	return &Parser{
+		logger:      logger,
+		transaction: t,
+	}
+}
+
+func (p *Parser) Run() {
+
 }
 
 type SQL interface{}
-
-type parser struct {
-	logger *log.Logger
-}
 
 var sqlLexer = lexer.Must(ebnf.New(`
 Comment = "--" { "\u0000"…"\uffff"-"\n" } .
@@ -40,7 +53,7 @@ digit = "0"…"9" .
 any = "\u0000"…"\uffff" .
 	`))
 
-func (p parser) Parse(sql string) (SQL, error) {
+func (p *Parser) Parse(sql string) (SQL, error) {
 	trimSQL := strings.TrimSpace(sql)
 
 	if strings.HasPrefix(trimSQL, "INSERT") {
@@ -51,7 +64,7 @@ func (p parser) Parse(sql string) (SQL, error) {
 		return p.ParseUpdate(trimSQL)
 	} else if strings.HasPrefix(trimSQL, "DELETE") {
 		return p.ParseDelete(trimSQL)
+	} else {
+		return nil, fmt.Errorf("unsupported sql %s", trimSQL)
 	}
-
-	return nil, nil
 }

@@ -19,7 +19,7 @@ var deleteSqlParser = participle.MustBuild(
 	participle.Elide("Whitespace", "Comment"),
 )
 
-func (p parser) ParseDelete(sql string) (*DeleteSQL, error) {
+func (p *Parser) ParseDelete(sql string) (*DeleteSQL, error) {
 	ast := &DeleteSQL{}
 
 	err := deleteSqlParser.ParseString(sql, ast)
@@ -30,6 +30,6 @@ func (p parser) ParseDelete(sql string) (*DeleteSQL, error) {
 	return ast, nil
 }
 
-func (p parser) TransformDelete(ast *DeleteSQL) *store.QueryTree {
+func (p *Parser) TransformDelete(ast *DeleteSQL) *store.QueryTree {
 	return transformWhere(ast.Where)
 }

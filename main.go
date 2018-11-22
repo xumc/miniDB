@@ -5,7 +5,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/xumc/miniDB/connection"
 	"github.com/xumc/miniDB/sqlparser"
+	"github.com/xumc/miniDB/transaction"
 
 	"github.com/xumc/miniDB/store"
 )
@@ -26,62 +28,63 @@ func main() {
 
 	s := store.NewStore(logger)
 
-	p := sqlparser.NewParser(logger)
+	t := transaction.NewTransaction(logger, s)
 
-	sql, err := p.Parse("INSERT INTO student(id, name, pass) VALUES(1, \"xumcxumc\", true);")
-	// sql, err := p.Parse("UPDATE student SET name=\"xumcxumcxumc\" WHERE name=\"xumcxumc\";")
-	// sql, err := p.Parse("SELECT * FROM student WHERE name=\"xumcxumc\";")
-	// sql, err := p.Parse("DELETE FROM student WHERE name=\"xumcxumc\";")
-	if err != nil {
-		panic(err)
-	}
+	p := sqlparser.NewParser(logger, t)
 
-	switch sqlStruct := sql.(type) {
-	case *sqlparser.InsertSQL:
-		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
-		if err != nil {
-			panic(err)
-		}
-		record := p.TransformInsert(sqlStruct, tableDesc)
+	c := connection.NewConnection(logger, p)
 
-		_, err = s.Insert(record.TableName, record)
-		if err != nil {
-			panic(err)
-		}
-	case *sqlparser.UpdateSQL:
-		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
-		if err != nil {
-			panic(err)
-		}
+	c.Run()
 
-		qt, setItems := p.TransformUpdate(sqlStruct, tableDesc)
+	// var g group.Group
 
-		_, err = s.Update(*sqlStruct.TableName, qt, setItems)
-		if err != nil {
-			panic(err)
-		}
-	case *sqlparser.SelectSQL:
-		qt := p.TransformSelect(sqlStruct)
+	// storge component runs
+	// {
+	// 	g.Add(
+	// 		func() error {
+	// 			s.Run()
+	// 			return nil
+	// 		},
+	// 		func(err error) {
+	// 		},
+	// 	)
+	// }
 
-		rs, err := s.Select(*sqlStruct.TableName, qt)
-		if err != nil {
-			panic(err)
-		}
+	// transaction component runs
+	// {
+	// 	g.Add(
+	// 		func() error {
+	// 			t.Run()
+	// 			return nil
+	// 		},
+	// 		func(err error) {
+	// 		},
+	// 	)
+	// }
 
-		fmt.Println(rs)
-	case *sqlparser.DeleteSQL:
-		qt := p.TransformDelete(sqlStruct)
+	// parser component runs
+	// {
+	// 	g.Add(
+	// 		func() error {
+	// 			p.Run()
+	// 			return nil
+	// 		},
+	// 		func(err error) {
+	// 		},
+	// 	)
+	// }
 
-		rs, err := s.Delete(*sqlStruct.TableName, qt)
-		if err != nil {
-			panic(err)
-		}
-
-		fmt.Println(rs)
-	default:
-	}
-
-	printRecords(s)
+	// connection component runs
+	// {
+	// 	g.Add(
+	// 		func() error {
+	// 			c.Run()
+	// 			return nil
+	// 		},
+	// 		func(err error) {
+	// 		},
+	// 	)
+	// }
 
 	fmt.Println("done")
 }

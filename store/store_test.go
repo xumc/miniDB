@@ -94,7 +94,7 @@ func TestCRUD(t *testing.T) {
 	})
 }
 
-func insertRecord(s Store, record Record) {
+func insertRecord(s *Store, record Record) {
 	affectedRows, err := s.Insert(record.TableName, record)
 	if err != nil {
 		if err == ErrDuplicatedRecord {
@@ -111,7 +111,7 @@ func insertRecord(s Store, record Record) {
 	fmt.Println("insert : ", affectedRows)
 }
 
-func assertRecords(s Store, t *testing.T, expected [][]interface{}) {
+func assertRecords(s *Store, t *testing.T, expected [][]interface{}) {
 	rs, err := s.Select("student", nil)
 	if err != nil {
 		panic(err)
@@ -127,7 +127,7 @@ func assertRecords(s Store, t *testing.T, expected [][]interface{}) {
 	return
 }
 
-func deleteRecords(s Store, qt *QueryTree) {
+func deleteRecords(s *Store, qt *QueryTree) {
 	affectedRows, err := s.Delete("student", qt)
 	if err != nil {
 		panic(err)
@@ -136,7 +136,7 @@ func deleteRecords(s Store, qt *QueryTree) {
 	fmt.Println("deleted: ", affectedRows)
 }
 
-func updateRecords(s Store, qt *QueryTree, uis []SetItem) {
+func updateRecords(s *Store, qt *QueryTree, uis []SetItem) {
 	affectedRows, err := s.Update("student", qt, uis)
 	if err != nil {
 		panic(err)

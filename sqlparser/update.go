@@ -32,7 +32,7 @@ var updateSqlParser = participle.MustBuild(
 	participle.Elide("Whitespace", "Comment"),
 )
 
-func (p parser) ParseUpdate(sql string) (*UpdateSQL, error) {
+func (p *Parser) ParseUpdate(sql string) (*UpdateSQL, error) {
 	ast := &UpdateSQL{}
 
 	err := updateSqlParser.ParseString(sql, ast)
@@ -43,7 +43,7 @@ func (p parser) ParseUpdate(sql string) (*UpdateSQL, error) {
 	return ast, nil
 }
 
-func (p parser) TransformUpdate(ast *UpdateSQL, tableDesc *store.TableDesc) (*store.QueryTree, []store.SetItem) {
+func (p *Parser) TransformUpdate(ast *UpdateSQL, tableDesc *store.TableDesc) (*store.QueryTree, []store.SetItem) {
 	qt := transformWhere(ast.Where)
 	storeSetitems := make([]store.SetItem, len(ast.SetItems))
 	for i, si := range ast.SetItems {

@@ -90,7 +90,7 @@ func (qt QueryTree) PrettyPrint() string {
 	return negative + "(" + qt.Left.PrettyPrint() + match + qt.Right.PrettyPrint() + ") "
 }
 
-func (s *store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) ([]Record, error) {
+func (s *Store) checkDuplicatedRecord(tableName string, primaryKey string, primaryKeyType ColumnTypes, primaryIndex int, primaryValue interface{}) ([]Record, error) {
 	query := func(record Record) (bool, error) {
 		desc, err := record.GetTableDesc()
 		if err != nil {
@@ -194,7 +194,7 @@ func isQueryTreeMatch(tableDesc *TableDesc, qt *QueryTree, recordValues []interf
 	return val, nil
 }
 
-func (s *store) Select(tableName string, qt *QueryTree) ([]Record, error) {
+func (s *Store) Select(tableName string, qt *QueryTree) ([]Record, error) {
 	records, err := s.scanRecords(tableName, query(qt), nil)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func (s *store) Select(tableName string, qt *QueryTree) ([]Record, error) {
 type hitTarget func(record Record) (bool, error)
 type replacer func(record Record) (newRecord *Record, err error)
 
-func (s *store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Record, error) {
+func (s *Store) scanRecords(tableName string, ht hitTarget, r replacer) ([]Record, error) {
 	tableDesc, err := GetTableDescFromTableName(tableName)
 	if err != nil {
 		return nil, err

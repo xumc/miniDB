@@ -25,7 +25,7 @@ var selectSqlParser = participle.MustBuild(
 	participle.Elide("Whitespace", "Comment"),
 )
 
-func (p parser) ParseSelect(sql string) (*SelectSQL, error) {
+func (p *Parser) ParseSelect(sql string) (*SelectSQL, error) {
 	ast := &SelectSQL{}
 	err := selectSqlParser.ParseString(sql, ast)
 	if err != nil {
@@ -35,6 +35,6 @@ func (p parser) ParseSelect(sql string) (*SelectSQL, error) {
 	return ast, nil
 }
 
-func (p parser) TransformSelect(ast *SelectSQL) *store.QueryTree {
+func (p *Parser) TransformSelect(ast *SelectSQL) *store.QueryTree {
 	return transformWhere(ast.Where)
 }

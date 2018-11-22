@@ -39,7 +39,7 @@ var insertSqlParser = participle.MustBuild(
 	participle.Elide("Whitespace", "Comment"),
 )
 
-func (p parser) ParseInsert(sql string) (*InsertSQL, error) {
+func (p *Parser) ParseInsert(sql string) (*InsertSQL, error) {
 	ast := &InsertSQL{}
 	err := insertSqlParser.ParseString(sql, ast)
 	if err != nil {
@@ -49,7 +49,7 @@ func (p parser) ParseInsert(sql string) (*InsertSQL, error) {
 	return ast, nil
 }
 
-func (p parser) TransformInsert(ast *InsertSQL, tableDesc *store.TableDesc) store.Record {
+func (p *Parser) TransformInsert(ast *InsertSQL, tableDesc *store.TableDesc) store.Record {
 	record := store.Record{
 		TableName: *ast.TableName,
 	}

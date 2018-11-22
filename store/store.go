@@ -10,7 +10,7 @@ import (
 )
 
 // Store is store interface
-type Store interface {
+type Storage interface {
 	RegisterTable(tableDesc TableDesc) error
 
 	Insert(tableName string, record Record) (affectedRows int64, err error)
@@ -20,9 +20,11 @@ type Store interface {
 	Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error)
 
 	Delete(talbeName string, qt *QueryTree) (affectedRows int64, err error)
+
+	Run()
 }
 
-type store struct {
+type Store struct {
 	logger *log.Logger
 }
 
@@ -33,13 +35,17 @@ var (
 )
 
 // NewStore creates new store implementation.
-func NewStore(logger *log.Logger) Store {
-	return &store{
+func NewStore(logger *log.Logger) *Store {
+	return &Store{
 		logger: logger,
 	}
 }
 
-func (s *store) RegisterTable(tableDesc TableDesc) error {
+func (s *Store) Run() {
+
+}
+
+func (s *Store) RegisterTable(tableDesc TableDesc) error {
 	for _, t := range tables {
 		if t.Name == tableDesc.Name {
 			return ErrDuplicatedTable
@@ -66,7 +72,7 @@ func (s *store) RegisterTable(tableDesc TableDesc) error {
 
 // Insert
 // 1. the order of values must be same with the order of table desc
-func (s *store) Insert(tableName string, record Record) (affectedRows int64, err error) {
+func (s *Store) Insert(tableName string, record Record) (affectedRows int64, err error) {
 	tableDesc, err := record.GetTableDesc()
 	if err != nil {
 		return 0, err
@@ -86,7 +92,7 @@ func (s *store) Insert(tableName string, record Record) (affectedRows int64, err
 	return a, nil
 }
 
-func (s *store) insert(record Record) (affectedRows int64, err error) {
+func (s *Store) insert(record Record) (affectedRows int64, err error) {
 	tableDesc, err := record.GetTableDesc()
 	if err != nil {
 		return 0, err
@@ -124,11 +130,11 @@ func (s *store) insert(record Record) (affectedRows int64, err error) {
 	return 1, nil
 }
 
-func (s *store) Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
+func (s *Store) Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
 	return s.update(tableName, qt, setItems)
 }
 
-func (s *store) update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
+func (s *Store) update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error) {
 	tableDesc, err := GetTableDescFromTableName(tableName)
 	if err != nil {
 		return 0, err
@@ -190,7 +196,7 @@ func (s *store) update(tableName string, qt *QueryTree, setItems []SetItem) (aff
 
 }
 
-func (s *store) Delete(tableName string, qt *QueryTree) (affectedRows int64, err error) {
+func (s *Store) Delete(tableName string, qt *QueryTree) (affectedRows int64, err error) {
 	deleteItemFn := func(r Record) (interface{}, error) {
 		return byte(0x80), nil
 	}
