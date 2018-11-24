@@ -1,9 +1,12 @@
 package sqlparser
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
+
+	"github.com/satori/go.uuid"
 
 	"github.com/xumc/miniDB/transaction"
 
@@ -67,4 +70,121 @@ func (p *Parser) Parse(sql string) (SQL, error) {
 	} else {
 		return nil, fmt.Errorf("unsupported sql %s", trimSQL)
 	}
+}
+
+type ColumnHeader struct {
+	Name string
+	Type store.ColumnTypes
+}
+
+type Result interface {
+	GetAffectedRows() int
+	GetResultData() [][]interface{}
+	GetResultHeader() []ColumnHeader
+}
+
+type TableResult struct {
+	data []store.Record
+}
+
+func (tr *TableResult) GetAffectedRows() int {
+	return int(len(tr.data))
+}
+
+func (tr *TableResult) GetResultData() [][]interface{} {
+	ret := make([][]interface{}, len(tr.data))
+	for i, c := range tr.data {
+		ret[i] = c.Values
+	}
+	return ret
+}
+
+func (tr *TableResult) GetResultHeader() []ColumnHeader {
+	return []ColumnHeader{} // TODO
+}
+
+type AffectedRowResult struct {
+	affectedRows int
+}
+
+func (tr *AffectedRowResult) GetAffectedRows() int {
+	return tr.affectedRows
+}
+
+func (tr *AffectedRowResult) GetResultData() [][]interface{} {
+	return nil
+}
+
+func (tr *AffectedRowResult) GetResultHeader() []ColumnHeader {
+	return nil
+}
+
+type beginSQL struct{}
+type commitSQL struct{}
+
+var BeginSQL = beginSQL{}
+var CommitSQL = commitSQL{}
+
+func (p *Parser) Next(tid uuid.UUID, sql SQL) (Result, error) {
+	switch sqlStruct := sql.(type) {
+	case beginSQL:
+		p.transaction.Lock()
+		return nil, nil
+	case commitSQL:
+		p.transaction.Unlock()
+		return nil, nil
+	case *InsertSQL:
+		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
+		if err != nil {
+			return nil, err
+		}
+		record := p.TransformInsert(sqlStruct, tableDesc)
+
+		affectedRows, err := p.transaction.Insert(record.TableName, record)
+		if err != nil {
+			return nil, err
+		}
+
+		p.logger.Printf("affected rows: %d", affectedRows)
+
+	case *UpdateSQL:
+		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
+		if err != nil {
+			return nil, err
+		}
+
+		qt, setItems := p.TransformUpdate(sqlStruct, tableDesc)
+
+		affectedRows, err := p.transaction.Update(*sqlStruct.TableName, qt, setItems)
+		if err != nil {
+			return nil, err
+		}
+
+		p.logger.Printf("affected rows: %d", affectedRows)
+
+	case *SelectSQL:
+		qt := p.TransformSelect(sqlStruct)
+
+		rs, err := p.transaction.Select(*sqlStruct.TableName, qt)
+		if err != nil {
+			return nil, err
+		}
+
+		p.logger.Printf("rows: %v", rs)
+
+	case *DeleteSQL:
+		qt := p.TransformDelete(sqlStruct)
+
+		affectedRows, err := p.transaction.Delete(*sqlStruct.TableName, qt)
+		if err != nil {
+			return nil, err
+		}
+
+		p.logger.Printf("affected rows: %d", affectedRows)
+
+	default:
+		return nil, errors.New("unsupport sql type")
+	}
+
+	return nil, nil
 }

@@ -20,8 +20,6 @@ type Storage interface {
 	Update(tableName string, qt *QueryTree, setItems []SetItem) (affectedRows int64, err error)
 
 	Delete(talbeName string, qt *QueryTree) (affectedRows int64, err error)
-
-	Run()
 }
 
 type Store struct {
@@ -39,10 +37,6 @@ func NewStore(logger *log.Logger) *Store {
 	return &Store{
 		logger: logger,
 	}
-}
-
-func (s *Store) Run() {
-
 }
 
 func (s *Store) RegisterTable(tableDesc TableDesc) error {

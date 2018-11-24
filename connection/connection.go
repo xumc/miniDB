@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/satori/go.uuid"
+
 	"github.com/xumc/miniDB/sqlparser"
 	"github.com/xumc/miniDB/utils"
 )
@@ -78,7 +80,7 @@ func (c *Connection) handleRequest(conn net.Conn) {
 }
 
 func (c *Connection) reader(conn net.Conn, readerChannel chan []byte) {
-	var session []sqlparser.SQL
+	var transactionID uuid.UUID
 
 	for {
 		select {
@@ -86,86 +88,47 @@ func (c *Connection) reader(conn net.Conn, readerChannel chan []byte) {
 			c.logger.Printf("data: %s", string(data))
 			sql := strings.Trim(string(data), "\n")
 			if sql == "BEGIN" {
-				session = make([]sqlparser.SQL, 0)
+				transactionID = uuid.Must(uuid.NewV4())
+				_, err := c.parser.Next(transactionID, sqlparser.BeginSQL)
+				if err != nil {
+					c.logger.Printf("begin error: %s", err)
+					writeErrorInfo(conn, err)
+					continue
+				}
+				c.logger.Printf("BEGIN transaction %v:", transactionID)
+
 			} else if sql == "COMMIT" {
-				c.logger.Printf("sql count in the transaction : %d", len(session))
+				_, err := c.parser.Next(transactionID, sqlparser.CommitSQL)
+				if err != nil {
+					c.logger.Printf("begin error: %s", err)
+					writeErrorInfo(conn, err)
+					continue
+				}
+				c.logger.Printf("COMMIT transaction id : %v", transactionID)
 			} else {
 				parsedSQL, err := c.parser.Parse(sql)
 				if err != nil {
 					c.logger.Printf("parser error: %s", err)
-					session = nil
-
-					errInfo := []byte(err.Error())
-					conn.Write([]byte(ConstHeader))
-					contentLen := len(errInfo)
-					conn.Write(utils.IntToBytes(contentLen))
-					conn.Write(errInfo)
-
+					writeErrorInfo(conn, err)
 					continue
 				}
 
-				session = append(session, parsedSQL)
+				_, err = c.parser.Next(transactionID, parsedSQL)
+				if err != nil {
+					c.logger.Printf("next error: %s", err)
+					writeErrorInfo(conn, err)
+					continue
+				}
 			}
 
 		}
 	}
 }
 
-//execute TODO remove execute
-// func (c *Connection) execute(sql sqlparser.SQL) error {
-// 	switch sqlStruct := sql.(type) {
-// 	case *sqlparser.InsertSQL:
-// 		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		record := c.parser.TransformInsert(sqlStruct, tableDesc)
-
-// 		affectedRows, err := c.store.Insert(record.TableName, record)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		c.logger.Printf("affected rows: %d", affectedRows)
-
-// 	case *sqlparser.UpdateSQL:
-// 		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		qt, setItems := c.parser.TransformUpdate(sqlStruct, tableDesc)
-
-// 		affectedRows, err := c.store.Update(*sqlStruct.TableName, qt, setItems)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		c.logger.Printf("affected rows: %d", affectedRows)
-
-// 	case *sqlparser.SelectSQL:
-// 		qt := c.parser.TransformSelect(sqlStruct)
-
-// 		rs, err := c.store.Select(*sqlStruct.TableName, qt)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		c.logger.Printf("rows: %v", rs)
-
-// 	case *sqlparser.DeleteSQL:
-// 		qt := c.parser.TransformDelete(sqlStruct)
-
-// 		affectedRows, err := c.store.Delete(*sqlStruct.TableName, qt)
-// 		if err != nil {
-// 			return err
-// 		}
-
-// 		c.logger.Printf("affected rows: %d", affectedRows)
-
-// 	default:
-// 		return errors.New("unsupport sql type")
-// 	}
-
-// 	return nil
-// }
+func writeErrorInfo(conn net.Conn, err error) {
+	errInfo := []byte(err.Error())
+	conn.Write([]byte(ConstHeader))
+	contentLen := len(errInfo)
+	conn.Write(utils.IntToBytes(contentLen))
+	conn.Write(errInfo)
+}
