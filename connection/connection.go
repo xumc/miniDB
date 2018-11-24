@@ -37,7 +37,7 @@ func NewConnection(logger *log.Logger, p *sqlparser.Parser) *Connection {
 func (c *Connection) Run() {
 	l, err := net.Listen(ConnType, Addr)
 	if err != nil {
-		c.logger.Fatalf("Error listening:", err.Error())
+		c.logger.Fatalf("Error listening: %s", err.Error())
 		os.Exit(1)
 	}
 	defer l.Close()
