@@ -131,7 +131,7 @@ func (p *Parser) Next(tid uuid.UUID, sql SQL) (Result, error) {
 		p.transaction.Lock()
 		return nil, nil
 	case commitSQL:
-		p.transaction.Unlock()
+		p.transaction.Unlock() // TODO what if begin => connection closed by client => no commit?
 		return nil, nil
 	case *InsertSQL:
 		tableDesc, err := store.GetMetadataOf(*sqlStruct.TableName)
