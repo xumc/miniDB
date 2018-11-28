@@ -6,6 +6,7 @@ run:
 test:
 	go get github.com/alecthomas/participle
 	go get github.com/satori/go.uuid
+	go get github.com/golang/protobuf/proto
 	mkdir -p report
 	$(foreach i,$(TEST_PKGS),go test $(i) -test.short -v -covermode=count -coverprofile=report/cover-`echo $(i) | sed 's/\//./g'`.coverprofile || exit 1;)
 	rm report/*.coverprofile
