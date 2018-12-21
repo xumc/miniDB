@@ -11,6 +11,7 @@ test:
 	go get google.golang.org/grpc
 	go get github.com/brg-liuwei/godnf
 	go get github.com/kr/pretty
+	go get github.com/stretchr/testify/assert
 	mkdir -p report
 	$(foreach i,$(TEST_PKGS),go test $(i) -test.short -v -covermode=count -coverprofile=report/cover-`echo $(i) | sed 's/\//./g'`.coverprofile || exit 1;)
 	rm report/*.coverprofile
